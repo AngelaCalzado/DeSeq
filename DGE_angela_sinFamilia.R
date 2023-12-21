@@ -16,8 +16,9 @@ require("ggrepel", quietly = TRUE)
 workingD <- rstudioapi::getActiveDocumentContext()$path
 setwd(dirname(workingD))
 
-divide_sex <- T
-males <- T
+#Input
+divide_sex <- F
+males <- F
 
 if (divide_sex) {
   if (males) {
@@ -32,6 +33,7 @@ if (divide_sex) {
 }
 
 configFile <- paste0('Archivo_configuracion_mPFC', suffix,'.txt')
+
 #Outputs
 resD <- paste0('DEG_results', suffix, '_sinFamilia/')
 
@@ -59,11 +61,13 @@ make_italics <- function(x){
 }
 
 
+#Load variables of each sample
 sampleTable <- read.table(configFile, header=TRUE
                           ,colClasses= c('factor','character','factor',
                                          'factor','factor')
 )
 
+#Convert the counts into a DeSeq DataSet object
 if (divide_sex) {
   data <- DESeqDataSetFromHTSeqCount(sampleTable, directory=".", 
                                    design = ~ Grupo)
@@ -71,9 +75,13 @@ if (divide_sex) {
   data <- DESeqDataSetFromHTSeqCount(sampleTable, directory=".", design = ~ Sexo + Grupo)
 }
 
+## Analysis
+#Pre-filtering: clean some of the noise in the counts
 keep <- rowSums(counts(data)) >= 10
 data <- data[keep,]
+#With this filter, the object goes from 61806 elements to 28525 elements
 
+# DESeq: original DESEQ() function doesnt allow to adjust number of iterations
 dds <- estimateSizeFactors(data)
 dds <- estimateDispersions(dds)
 dds <- nbinomWaldTest(dds, maxit = 10000)
@@ -88,7 +96,7 @@ write.table(dds_normalized, file=normCountsF, quote=FALSE,
             sep = "\t", col.names=NA)
 save(dds, file = DESEqResultsF)
 
-#PCA
+#PCA: blind must be FALSE to take into account batch effect
 vst <- varianceStabilizingTransformation(dds, blind = FALSE)
 mat <- assay(vst)
 if (!divide_sex) {
@@ -107,6 +115,8 @@ pca + ggtitle(title) +
         legend.text=element_text(size=15),legend.title=element_text(size=15)) +
   geom_text_repel(aes(label=colnames(vst)), size=5, point.padding = 0.6)
 dev.off()
+
+#Distances between samples
 '
 distRL <- dist(t(mat))
 distMat <- as.matrix(distRL)
@@ -207,4 +217,29 @@ invisible(dev.off())
 
 #write.table (significant, file=alphasigTSV, quote=FALSE, sep="\t", col.names=NA)
 
+#Heatmap
+significant001 <- significant[significant$pvalue < 0.0001,]
+subcounts <- subset(mat, rownames(mat) %in% 
+                      rownames(significant001)) #use vst matrix removed by covariates
+lsubcounts <- log2(subcounts+1) #added pseudocount 1
+
+#For the plot gene names
+sig_symbol <- as.character(significant001$symbol)
+conditions <- c(l1, l2)
+conds <- subset(sampleTable, sampleTable$Grupo %in% conditions)
+samples <- conds$Rata
+
+df <- data.frame(condition=conds$Grupo)
+rownames(df) <- samples
+my_colour <- list(df=c(l1="skyblue", l2="orange"))
+title <- "Heatmap of genes with p-value < 0.00001"
+
+jpeg(filename = heatmapF, units="in", width=8, height=5, res=300)
+pheatmap(lsubcounts, scale= 'row', cluster_rows = TRUE,
+         cluster_cols = TRUE, legend= TRUE, drop_levels = TRUE, 
+         labels_row = make_italics(sig_symbol), 
+         main = title,
+         annotation_col = df, annotation_colors = my_colour,
+         treeheight_row = 30, treeheight_col = 20)
+invisible(dev.off())
 
