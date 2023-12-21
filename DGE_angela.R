@@ -16,6 +16,7 @@ require("ggrepel", quietly = TRUE)
 workingD <- rstudioapi::getActiveDocumentContext()$path
 setwd(dirname(workingD))
 
+#Input
 divide_sex <- F
 males <- F
 
@@ -32,6 +33,7 @@ if (divide_sex) {
 }
 
 configFile <- paste0('Archivo_configuracion_mPFC', suffix,'.txt')
+
 #Outputs
 resD <- paste0('DEG_results', suffix, '/')
 
@@ -59,11 +61,13 @@ make_italics <- function(x){
 }
 
 
+#Load variables of each sample
 sampleTable <- read.table(configFile, header=TRUE
                           ,colClasses= c('factor','character','factor',
                                          'factor','factor')
 )
 
+#Convert the counts into a DeSeq DataSet object
 if (divide_sex) {
   data <- DESeqDataSetFromHTSeqCount(sampleTable, directory=".", 
                                    design = ~ Familia + Grupo)
@@ -71,9 +75,13 @@ if (divide_sex) {
   data <- DESeqDataSetFromHTSeqCount(sampleTable, directory=".", design = ~ Sexo + Familia + Grupo)
 }
 
+## Analysis
+#Pre-filtering: clean some of the noise in the counts
 keep <- rowSums(counts(data)) >= 10
 data <- data[keep,]
+#With this filter, the object goes from 61806 elements to 28525 elements
 
+# DESeq: original DESEQ() function doesnt allow to adjust number of iterations
 dds <- estimateSizeFactors(data)
 dds <- estimateDispersions(dds)
 dds <- nbinomWaldTest(dds, maxit = 10000)
@@ -86,9 +94,11 @@ write.table(dds_raw, file=rawCountsF, quote=FALSE,
             sep = "\t", col.names=NA)
 write.table(dds_normalized, file=normCountsF, quote=FALSE, 
             sep = "\t", col.names=NA)
+
+#Save DESeq results for GSEA
 save(dds, file = DESEqResultsF)
 
-#PCA
+#PCA: blind must be FALSE to take into account batch effect
 vst <- varianceStabilizingTransformation(dds, blind = FALSE)
 mat <- assay(vst)
 if (divide_sex) {mm <- model.matrix(~ Familia + Grupo, colData(vst))
@@ -111,6 +121,8 @@ pca + ggtitle(title) +
         legend.text=element_text(size=15),legend.title=element_text(size=15)) +
   geom_text_repel(aes(label=colnames(vst)), size=5, point.padding = 0.6)
 dev.off()
+
+#Distances between samples
 '
 distRL <- dist(t(mat))
 distMat <- as.matrix(distRL)
@@ -136,7 +148,7 @@ l2 <- toString(levels[1])
 suffix <- paste(l1, l2, sep="_vs_")
 
 #Get results
-res <- results(dds, contrast=c("Grupo", l2, l1))
+res <- results(dds, contrast=c("Grupo", l2, l1), independentFiltering = T)
 res$FoldChange <- 2^res$log2FoldChange  #have actual fold change
 res <- res[colnames(res)[c(1,7,2:6)]] # order columns
 
@@ -214,7 +226,7 @@ pca_sig + ggtitle(title) +
 invisible(dev.off())
 
 #Heatmap
-significant001 <- significant[significant$pvalue < 0.001,]
+significant001 <- significant[significant$pvalue < 0.000282,]
 subcounts <- subset(mat, rownames(mat) %in% 
                       rownames(significant001)) #use vst matrix removed by covariates
 lsubcounts <- log2(subcounts+1) #added pseudocount 1
@@ -228,7 +240,7 @@ samples <- conds$Rata
 df <- data.frame(condition=conds$Grupo)
 rownames(df) <- samples
 my_colour <- list(df=c(l1="skyblue", l2="orange"))
-title <- "Heatmap of genes with p-value < 0.001"
+title <- "Heatmap of genes with p-value < 0.0002"
 
 jpeg(filename = heatmapF, units="in", width=8, height=5, res=300)
 pheatmap(lsubcounts, scale= 'row', cluster_rows = TRUE,
