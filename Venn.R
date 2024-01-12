@@ -2,33 +2,34 @@ install.packages("ggVennDiagram")
 library(ggVennDiagram)
 library(ggplot2)
 
-category <- "C5_CC" 
+category <- "C2_KEGG" 
 
 workingD <- rstudioapi::getActiveDocumentContext()$path
 setwd(dirname(workingD))
 
 input_males <- paste("results_GSEA_males_sinFamilia/stat/", category, "/GSEA_results_males_sinFamilia.txt", sep = "")
 input_females <- paste("results_GSEA_females_sinFamilia/stat/", category, "/GSEA_results_females_sinFamilia.txt", sep = "")
-input_all <- paste("results_GSEA_sinFamilia/stat/", category, "/GSEA_results_sinFamilia.txt", sep = "")
+#input_all <- paste("results_GSEA_sinFamilia/stat/", category, "/GSEA_results_sinFamilia.txt", sep = "")
 
 males <- read.table(input_males, header = TRUE, sep="\t", row.names = 1)
 females <- read.table(input_females, header = TRUE, sep="\t", row.names = 1)
-all <- read.table(input_all, header = TRUE, sep="\t", row.names = 1)
+#all <- read.table(input_all, header = TRUE, sep="\t", row.names = 1)
 
 cat_males <- row.names(males)
 cat_females <- row.names(females)
-cat_all <-row.names(all)
+#cat_all <-row.names(all)
 
 # Diagrama de Venn
-data <- list(Males = cat_males, Females = cat_females, All = cat_all)
+#data <- list(Males = cat_males, Females = cat_females, All = cat_all)
+data <- list(Males = cat_males, Females = cat_females)
 Venn <- ggVennDiagram(data)
-ggsave(paste("Venn_GSEA/", category, "_Venn.jpeg", sep = ""), Venn)
+ggsave(paste("Venn_GSEA/", category, "_Venn_males_females.jpeg", sep = ""), Venn)
 
 # Ver que categoria tienen en comun
 males_females <- intersect(rownames(males), rownames(females))
-males_all <- intersect(rownames(males), rownames(all))
-females_all <- intersect(rownames(females), rownames(all))
-males_females_all <- Reduce (intersect, list(rownames(males), rownames(females), rownames(all)))
+#males_all <- intersect(rownames(males), rownames(all))
+#females_all <- intersect(rownames(females), rownames(all))
+#males_females_all <- Reduce (intersect, list(rownames(males), rownames(females), rownames(all)))
 
 common_males <- males[row.names(males) %in% males_females, ]
 write.table(common_males, file = paste("Venn_GSEA/", category,"_common_males.tsv"), sep = "\t", row.names = TRUE)
